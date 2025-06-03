@@ -2,7 +2,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # Путь к JSON-файлу (если он на рабочем столе)
-SERVICE_ACCOUNT_FILE = '/Users/melisaldaiar/Desktop/whatsapp-order-bot-461808-5acddb53bf52.json'
+SERVICE_ACCOUNT_FILE = '/etc/secrets/service_account.json'
 
 # Указываем права доступа
 scopes = ["https://www.googleapis.com/auth/spreadsheets"]
