@@ -1,2 +1,4 @@
-gspread
-google-auth
+fastapi
+uvicorn
+
+fix requirements.txt for FastAPI
