@@ -1,21 +1,17 @@
-import gspread
-from google.oauth2.service_account import Credentials
+def get_sheet_data():
+    import gspread
+    from google.oauth2.service_account import Credentials
+    import json
 
-# Путь к JSON-файлу (если он на рабочем столе)
-SERVICE_ACCOUNT_FILE = '/etc/secrets/service_account.json'
+    creds_path = "/etc/secrets/service_account.json"
+    scopes = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
-# Указываем права доступа
-scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-credentials = Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE,
-    scopes=scopes
-)
+    with open(creds_path) as source:
+        creds_dict = json.load(source)
 
-# Новый ID таблицы (проверь внимательно регистр букв!)
-spreadsheet_id = '1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE'
+    credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    gc = gspread.authorize(credentials)
 
-# Подключаемся и читаем первую строку
-client = gspread.authorize(credentials)
-sheet = client.open_by_key(spreadsheet_id).worksheet("Лист1")
-
-print(sheet.row_values(1))
+    spreadsheet = gc.open_by_key("1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE")
+    worksheet = spreadsheet.sheet1
+    return worksheet.get_all_records()
