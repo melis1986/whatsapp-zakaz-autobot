@@ -1,12 +1,21 @@
 from fastapi import FastAPI
-from check_google_sheet import get_sheet_data
+import gspread
+from google.oauth2.service_account import Credentials
+from fastapi.responses import JSONResponse
 
 app = FastAPI()
 
 @app.get("/")
 def read_root():
     try:
-        data = get_sheet_data()
-        return {"message": "CRM данные успешно получены", "data": data}
+        # Путь до секрета (файла с ключом)
+        creds = Credentials.from_service_account_file("/etc/secrets/service_account.json")
+        gc = gspread.authorize(creds)
+
+        # Пробуем открыть таблицу по названию (замени на своё название!)
+        spreadsheet = gc.open("whatsapp-crm")
+
+        return {"message": "Бот подключён к таблице ✅"}
+
     except Exception as e:
-        return {"error": str(e)}
+        return JSONResponse(content={"error": f"Ошибка подключения: {str(e)}"}, status_code=500)
