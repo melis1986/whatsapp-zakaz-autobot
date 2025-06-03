@@ -4,9 +4,9 @@ def get_sheet_data():
     import json
 
     creds_path = "/etc/secrets/service_account.json"
-    scopes = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
+   scopes = [
+    "https://www.googleapis.com/auth/spreadsheets.readonly",
+    "https://www.googleapis.com/auth/drive.readonly"
 ]
     with open(creds_path) as source:
         creds_dict = json.load(source)
