@@ -23,8 +23,9 @@ def read_root():
         )
         gc = gspread.authorize(creds)
 
-        # Название таблицы, к которой получаем доступ
-        spreadsheet = gc.open("1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE")
+        # Используем ID таблицы (а не имя!)
+        spreadsheet_id = "1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE"
+        spreadsheet = gc.open_by_key(spreadsheet_id)
 
         # Читаем первую строку первого листа
         sheet = spreadsheet.sheet1
