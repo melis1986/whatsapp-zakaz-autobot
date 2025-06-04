@@ -24,7 +24,7 @@ def read_root():
         gc = gspread.authorize(creds)
 
         # Название таблицы, к которой получаем доступ
-        spreadsheet = gc.open("CRM Autoparts")
+        spreadsheet = gc.open("1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE")
 
         # Читаем первую строку первого листа
         sheet = spreadsheet.sheet1
