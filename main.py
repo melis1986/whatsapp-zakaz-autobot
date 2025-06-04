@@ -37,13 +37,13 @@ def read_root():
             "headers": first_row
         })
 
-    except Exception as e:
+        except Exception as e:
         import traceback
         return JSONResponse(
             content={
                 "error": "Ошибка подключения",
                 "details": str(e),
                 "trace": traceback.format_exc()
-        },
-        status_code=500
-    )
+            },
+            status_code=500
+        )
