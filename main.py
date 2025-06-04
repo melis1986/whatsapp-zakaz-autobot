@@ -14,8 +14,7 @@ creds = Credentials.from_service_account_file("/etc/secrets/service_account.json
         gc = gspread.authorize(creds)
 
         # Пробуем открыть таблицу по названию (замени на своё название!)
-        spreadsheet = gc.open("whatsapp-crm")
-
+        spreadsheet = gc.open_by_key("1YHAhKeKzT5in87uf1d5VcT0AnXllhXl4PemviXbPxNE")
         return {"message": "Бот подключён к таблице ✅"}
 
     except Exception as e:
