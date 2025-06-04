@@ -1,12 +1,11 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, PlainTextResponse
 import gspread
 from google.oauth2.service_account import Credentials
+from fastapi.responses import JSONResponse, PlainTextResponse
 import traceback
 
 app = FastAPI()
 
-# === Основной GET-эндпоинт ===
 @app.get("/")
 def read_root():
     try:
@@ -41,8 +40,8 @@ def read_root():
             status_code=500
         )
 
-# === Webhook ===
-VERIFY_TOKEN = "autoland777"  # Используй точно такой же в Meta
+# Webhook блок №1
+VERIFY_TOKEN = "autoland777"
 
 @app.get("/webhook")
 async def verify_webhook(request: Request):
@@ -61,3 +60,24 @@ async def receive_webhook(request: Request):
     data = await request.json()
     print("📩 Входящее сообщение:", data)
     return {"status": "received"}
+
+# Дубликат Webhook (НЕ рекомендуется оставлять)
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, PlainTextResponse
+
+app = FastAPI()
+
+VERIFY_TOKEN = "my_custom_token_123"
+
+@app.get("/webhook")
+async def verify_webhook(request: Request):
+    params = dict(request.query_params)
+    if params.get("hub.mode") == "subscribe" and params.get("hub.verify_token") == VERIFY_TOKEN:
+        return PlainTextResponse(content=params.get("hub.challenge"))
+    return PlainTextResponse(content="Verification token mismatch", status_code=403)
+
+@app.post("/webhook")
+async def receive_webhook(request: Request):
+    data = await request.json()
+    print("🚀 Входящий Webhook:", data)
+    return JSONResponse(content={"status": "received"})
