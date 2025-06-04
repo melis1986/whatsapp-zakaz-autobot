@@ -8,23 +8,36 @@ app = FastAPI()
 @app.get("/")
 def read_root():
     try:
+        # Указываем путь к секретному ключу (он автоматически монтируется Render'ом)
+        SERVICE_ACCOUNT_FILE = "/etc/secrets/service_account.json"
+
+        # Правильные OAuth scopes
+        SCOPES = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+
+        # Авторизация через Google API
         creds = Credentials.from_service_account_file(
-            "/etc/secrets/service_account.json",
-            scopes=[
-                "https://www.googleapis.com/auth/spreadsheets",
-                "https://www.googleapis.com/auth/drive"
-            ]
+            SERVICE_ACCOUNT_FILE, scopes=SCOPES
         )
         gc = gspread.authorize(creds)
 
-        # Подключаем таблицу и первый лист
-        spreadsheet = gc.open("1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE")  # <-- убедись, что такое имя
-        sheet = spreadsheet.sheet1  # Лист по умолчанию
+        # Название таблицы, к которой получаем доступ
+        spreadsheet = gc.open("CRM Autoparts")
 
-        # Читаем первую строку, чтобы проверить
-        data = sheet.row_values(1)
+        # Читаем первую строку первого листа
+        sheet = spreadsheet.sheet1
+        first_row = sheet.row_values(1)
 
-        return {"message": "Бот подключён ✅", "data": data}
+        # Возвращаем JSON-ответ
+        return JSONResponse(content={
+            "message": "Бот подключен к таблице ✅",
+            "headers": first_row
+        })
 
     except Exception as e:
-        return JSONResponse(content={"error": f"Ошибка подключения: {str(e)}"}, status_code=500)
+        return JSONResponse(
+            content={"error": f"Ошибка подключения: {str(e)}"},
+            status_code=500
+        )
