@@ -18,7 +18,7 @@ credentials = Credentials.from_service_account_file(
 client = gspread.authorize(credentials)
 
 # Укажи ID таблицы, если открываешь по ключу
-spreadsheet_id = "1YHAhKeKzT5in87uf1d5vCt0AnXllhXL4PemvixbPxNE"  # Твоя CRM Autoparts
+spreadsheet_id = "1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE"  # Твоя CRM Autoparts
 sheet = client.open_by_key(spreadsheet_id).sheet1
 
 # Вывод первой строки таблицы
