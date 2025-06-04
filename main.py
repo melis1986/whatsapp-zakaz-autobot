@@ -39,3 +39,24 @@ def read_root():
             },
             status_code=500
         )
+from fastapi.responses import PlainTextResponse  # обязательно импортировать
+
+VERIFY_TOKEN = "autoland777"  # должен совпадать с тем, что ввёл в Meta
+
+@app.get("/webhook")
+async def verify_webhook(request: Request):
+    params = dict(request.query_params)
+    mode = params.get("hub.mode")
+    token = params.get("hub.verify_token")
+    challenge = params.get("hub.challenge")
+
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        return PlainTextResponse(content=challenge, status_code=200)
+    else:
+        return PlainTextResponse(content="Verification failed", status_code=403)
+
+@app.post("/webhook")
+async def receive_webhook(request: Request):
+    data = await request.json()
+    print("📩 Входящее сообщение:", data)
+    return {"status": "received"}
