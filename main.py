@@ -9,7 +9,8 @@ app = FastAPI()
 def read_root():
     try:
         # Путь до секрета (файла с ключом)
-        creds = Credentials.from_service_account_file("/etc/secrets/service_account.json")
+        SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+creds = Credentials.from_service_account_file("/etc/secrets/service_account.json", scopes=SCOPES)
         gc = gspread.authorize(creds)
 
         # Пробуем открыть таблицу по названию (замени на своё название!)
