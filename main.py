@@ -18,7 +18,7 @@ def read_root():
         gc = gspread.authorize(creds)
 
         # Подключаем таблицу и первый лист
-        spreadsheet = gc.open("whatsapp-crm")  # <-- убедись, что такое имя
+        spreadsheet = gc.open("1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE")  # <-- убедись, что такое имя
         sheet = spreadsheet.sheet1  # Лист по умолчанию
 
         # Читаем первую строку, чтобы проверить
