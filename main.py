@@ -8,6 +8,7 @@ app = FastAPI()
 @app.get("/")
 def read_root():
     try:
+        # Подключение через сервисный JSON-файл
         creds = Credentials.from_service_account_file(
             "/etc/secrets/service_account.json",
             scopes=[
@@ -16,15 +17,20 @@ def read_root():
             ]
         )
         gc = gspread.authorize(creds)
-        
-        # Подключаем таблицу по названию
-        spreadsheet = gc.open("1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE")
-        
-        # Пробуем прочитать первую строку
-        sheet = spreadsheet.sheet1
-        values = sheet.row_values(1)
-        
-        return {"message": "✅ Бот подключён. Первая строка таблицы:", "row_1": values}
-    
+
+        # Название таблицы (убедись, что совпадает!)
+        spreadsheet = gc.open("CRM Autoparts")
+
+        # Подключение к первому листу
+        worksheet = spreadsheet.worksheet("Лист1")
+
+        # Чтение первой строки таблицы
+        first_row = worksheet.row_values(1)
+
+        return {
+            "message": "Успешное подключение ✅",
+            "first_row": first_row
+        }
+
     except Exception as e:
         return JSONResponse(content={"error": f"Ошибка подключения: {str(e)}"}, status_code=500)
