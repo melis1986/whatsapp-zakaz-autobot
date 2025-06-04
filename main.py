@@ -19,7 +19,7 @@ def read_root():
         gc = gspread.authorize(creds)
 
         # Пробуем открыть таблицу по названию (замени на своё название!)
-        spreadsheet = gc.open"1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE"
+        spreadsheet = gc.open "1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE"
 
         return {"message": "Бот подключён к таблице ✅"}
 
