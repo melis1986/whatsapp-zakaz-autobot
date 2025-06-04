@@ -66,10 +66,6 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 
 app = FastAPI()
 
-VERIFY_TOKEN = "my_custom_token_123"  # тот же, что ты указал при настройке Webhook
-
-@app.get("/webhook")
-async def verify_webhook(request: Request):
     params = dict(request.query_params)
     if params.get("hub.mode") == "subscribe" and params.get("hub.verify_token") == VERIFY_TOKEN:
         return PlainTextResponse(content=params.get("hub.challenge"))
