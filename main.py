@@ -17,10 +17,14 @@ def read_root():
         )
         gc = gspread.authorize(creds)
 
-        # Подключаем таблицу по названию
-        spreadsheet = gc.open_by_key("1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE")
+        # Подключаем таблицу и первый лист
+        spreadsheet = gc.open("whatsapp-crm")  # <-- убедись, что такое имя
+        sheet = spreadsheet.sheet1  # Лист по умолчанию
 
-        return {"message": "✅ Бот подключен к таблице успешно!"}
+        # Читаем первую строку, чтобы проверить
+        data = sheet.row_values(1)
+
+        return {"message": "Бот подключён ✅", "data": data}
 
     except Exception as e:
         return JSONResponse(content={"error": f"Ошибка подключения: {str(e)}"}, status_code=500)
