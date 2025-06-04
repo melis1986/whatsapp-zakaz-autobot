@@ -18,7 +18,7 @@ def read_root():
         gc = gspread.authorize(creds)
 
         # Подключаем таблицу по названию
-        spreadsheet = gc.open("1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE")
+        spreadsheet = gc.open_by_key("1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE")
 
         return {"message": "✅ Бот подключен к таблице успешно!"}
 
