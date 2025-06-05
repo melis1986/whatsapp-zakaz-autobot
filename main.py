@@ -48,8 +48,8 @@ async def verify_webhook(request: Request):
     challenge = params.get("hub.challenge")
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
-        return PlainTextResponse(content=challenge, status_code=200)
-    return PlainTextResponse(content="Verification failed", status_code=403)
+        return PlainTextResponse(content=challenge, status_code=200, media_type="text/plain")
+    return PlainTextResponse(content="Verification failed", status_code=403, media_type="text/plain")
 
 # === WEBHOOK POST ===
 @app.post("/webhook")
