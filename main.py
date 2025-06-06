@@ -58,29 +58,26 @@ async def verify_webhook(request: Request):
     return PlainTextResponse(content="Verification failed", status_code=403, media_type="text/plain")
 
 # === CHATGPT FUNCTION ===
+import os
 from openai import OpenAI
 
-def ask_chatgpt(question):
+# Клиент OpenAI, автоматически берёт ключ из переменной окружения
+client = OpenAI()
+
+def ask_chatgpt(prompt):
     try:
-        import os
-from openai import OpenAI
-
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Ты помощник по автозапчастям. Отвечай коротко и по делу."},
-                {"role": "user", "content": question}
-            ]
+                {"role": "system", "content": "Ты помогаешь с автозапчастями. Отвечай кратко и по делу."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print("❌ Ошибка при обращении к ChatGPT:", e)
-        traceback.print_exc()
-        return "Произошла ошибка при обращении к ChatGPT."
-
+        print(f"❌ Ошибка при обращении к ChatGPT: {e}")
+        return "Извините, произошла ошибка при подключении к ИИ."
 # === WHATSAPP SEND ===
 def send_whatsapp_reply(recipient_number: str, message: str):
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
