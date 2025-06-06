@@ -113,4 +113,3 @@ async def receive_webhook(request: Request):
 except Exception as e:
     print("❌ Ошибка при обращении к ChatGPT:", e)
     traceback.print_exc()
-    return {"status": "received"}
