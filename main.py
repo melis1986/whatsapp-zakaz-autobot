@@ -61,8 +61,11 @@ async def verify_webhook(request: Request):
     return PlainTextResponse(content="Verification failed", status_code=403, media_type="text/plain")
 
 # === CHATGPT FUNCTION ===
+from openai import OpenAI
+
 def ask_chatgpt(prompt):
     try:
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
