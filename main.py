@@ -59,12 +59,15 @@ async def verify_webhook(request: Request):
 
 # === CHATGPT FUNCTION ===
 def ask_chatgpt(question):
-    openai.api_key = OPENAI_API_KEY
     try:
-        response = openai.ChatCompletion.create(
+        client = openai.OpenAI(api_key=OPENAI_API_KEY)
+
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": question}],
-            max_tokens=1000
+            messages=[
+                {"role": "system", "content": "Ты помощник по автозапчастям. Отвечай коротко и по делу."},
+                {"role": "user", "content": question}
+            ]
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
