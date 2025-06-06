@@ -121,3 +121,19 @@ async def receive_webhook(request: Request):
         print("❌ Ошибка:", e)
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
+
+# === OPENAI TEST ===
+@app.get("/test-openai")
+def test_openai_key():
+    try:
+        if not OPENAI_API_KEY:
+            return {"status": "error", "message": "❌ OPENAI_API_KEY не установлен в окружении"}
+
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": "Проверка ключа OpenAI. Ты меня слышишь?"}]
+        )
+        return {"status": "success", "reply": response.choices[0].message.content.strip()}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
