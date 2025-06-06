@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 import traceback
 import requests
+import gspread  # ← ← ← Добавь эту строку
 from google.oauth2.service_account import Credentials
 import os
 from openai import OpenAI
