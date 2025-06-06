@@ -137,3 +137,21 @@ def test_openai_key():
         return {"status": "success", "reply": response.choices[0].message.content.strip()}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@app.get("/test-openai")
+def test_openai():
+    try:
+        test_prompt = "Привет! Ты меня слышишь?"
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": test_prompt}]
+        )
+        return {
+            "status": "success",
+            "reply": response.choices[0].message.content.strip()
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
