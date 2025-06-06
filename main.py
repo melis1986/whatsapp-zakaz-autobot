@@ -15,11 +15,7 @@ SERVICE_ACCOUNT_FILE = "/etc/secrets/service_account.json"
 SPREADSHEET_KEY = "1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE"
 
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PHONE_NUMBER_ID = "647813198421368"
-
-# === OpenAI клиент ===
-client = OpenAI(api_key=OPENAI_API_KEY)
 
 # === ROOT TEST ===
 @app.get("/")
@@ -61,11 +57,13 @@ async def verify_webhook(request: Request):
     return PlainTextResponse(content="Verification failed", status_code=403, media_type="text/plain")
 
 # === CHATGPT FUNCTION ===
-from openai import OpenAI
-
 def ask_chatgpt(prompt):
     try:
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise Exception("OPENAI_API_KEY не установлен в переменных окружения")
+
+        client = OpenAI(api_key=api_key)
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
