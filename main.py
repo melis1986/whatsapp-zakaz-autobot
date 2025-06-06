@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 import traceback
 import requests
-import gspread
+gspread
 from google.oauth2.service_account import Credentials
 import os
 from openai import OpenAI
@@ -107,36 +107,30 @@ async def receive_webhook(request: Request):
 
         if messages:
             msg = messages[0]
-from_number = msg["from"]
-msg_type = msg["type"]
+            from_number = msg["from"]
+            msg_type = msg["type"]
 
-if msg_type == "audio":
-    # Голосовое сообщение — просим клиента написать
-    reply = "🎙️ Вы отправили голосовое сообщение. Пожалуйста, напишите текстом, чтобы мы точно поняли вашу заявку."
-    send_whatsapp_reply(from_number, reply)
-    return {"status": "audio_handled"}
+            if msg_type == "audio":
+                reply = "🎙️ Вы отправили голосовое сообщение. Пожалуйста, напишите текстом, чтобы мы точно поняли вашу заявку."
+                send_whatsapp_reply(from_number, reply)
+                return {"status": "audio_handled"}
 
-elif msg_type == "text":
-    text = msg["text"]["body"]
-    print("📨 Получено сообщение:", text)
+            elif msg_type == "text":
+                text = msg["text"]["body"]
+                print("📨 Получено сообщение:", text)
+                reply = ask_chatgpt(text)
+                send_whatsapp_reply(from_number, reply)
+                return {"status": "text_handled"}
 
-    reply = ask_chatgpt(text)
-    send_whatsapp_reply(from_number, reply)
-    return {"status": "text_handled"}
-
-else:
-    send_whatsapp_reply(from_number, "Извините, поддерживаются только текстовые и голосовые сообщения.")
-    return {"status": "unsupported_message"}
-
-            print("📨 Получено сообщение:", text)
-
-            reply = ask_chatgpt(text)
-            send_whatsapp_reply(from_number, reply)
+            else:
+                send_whatsapp_reply(from_number, "Извините, поддерживаются только текстовые и голосовые сообщения.")
+                return {"status": "unsupported_message"}
 
     except Exception as e:
         print("❌ Ошибка обработки запроса:", e)
         traceback.print_exc()
 
+# === OPENAI TEST ===
 @app.get("/test-openai")
 def test_openai_key():
     try:
