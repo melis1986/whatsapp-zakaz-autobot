@@ -72,6 +72,11 @@ def log_to_sheet(number, original, translated):
     sheet = gc.open_by_key(SPREADSHEET_KEY).sheet1
     sheet.append_row([number, original, translated])
 
+# === ROOT CHECK ===
+@app.get("/")
+def root():
+    return {"message": "WhatsApp CRM Bot is working ✅"}
+
 # === WEBHOOK ===
 @app.post("/webhook")
 async def receive_webhook(request: Request):
