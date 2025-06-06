@@ -108,8 +108,9 @@ async def receive_webhook(request: Request):
             reply = ask_chatgpt(text)
             send_whatsapp_reply(from_number, reply)
 
-    except Exception as e:
-        print("❌ Ошибка обработки сообщения:", str(e))
-        print(traceback.format_exc())
+    import traceback
 
+except Exception as e:
+    print("❌ Ошибка при обращении к ChatGPT:", e)
+    traceback.print_exc()
     return {"status": "received"}
