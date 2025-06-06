@@ -118,3 +118,29 @@ async def receive_webhook(request: Request):
     except Exception as e:
         print("❌ Ошибка обработки запроса:", e)
         traceback.print_exc()
+
+@app.get("/test-openai")
+def test_openai_key():
+    try:
+        from openai import OpenAI
+        import os
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return {"status": "error", "message": "❌ OPENAI_API_KEY не установлен в окружении"}
+
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "user", "content": "Проверка ключа OpenAI. Ты меня слышишь?"}
+            ],
+            temperature=0.5
+        )
+        return {
+            "status": "success",
+            "reply": response.choices[0].message.content.strip()
+        }
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
