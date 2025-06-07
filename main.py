@@ -127,20 +127,28 @@ async def receive_webhook(request: Request):
         change = entry["changes"][0]["value"]
         messages = change.get("messages")
 
-        if messages:
+                if messages:
             msg = messages[0]
             from_number = msg["from"]
             text = msg["text"]["body"]
 
             print("📨 Получено сообщение:", text)
 
-            # 1. Ответ клиенту
-            reply = ask_chatgpt(text)
-            send_whatsapp_reply(from_number, reply)
+            # 1. Определяем язык клиента
+            client_lang = detect_language(text)
 
-            # 2. Перевод для сотрудника и отправка ему
-            translated = translate_to_english(text)
+            # 2. Переводим для сотрудника
+            translated = translate(text, client_lang, "english")
             send_whatsapp_reply("971501109728", translated)
+
+            # 3. Получаем ответ от ChatGPT от имени сотрудника
+            employee_response = ask_chatgpt(translated)
+
+            # 4. Переводим ответ обратно на язык клиента
+            translated_back = translate(employee_response, "english", client_lang)
+
+            # 5. Отправляем клиенту
+            send_whatsapp_reply(from_number, translated_back)
 
     except Exception as e:
         print("❌ Ошибка обработки запроса:", e)
