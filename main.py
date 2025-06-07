@@ -5,7 +5,8 @@ import requests
 import gspread
 from google.oauth2.service_account import Credentials
 import os
-from openai import OpenAI  # ✅ новый способ импорта
+import re
+from openai import OpenAI
 
 app = FastAPI()
 
@@ -17,6 +18,7 @@ SPREADSHEET_KEY = "1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE"
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PHONE_NUMBER_ID = "647813198421368"
+EMPLOYEE_NUMBER = "971501109728"
 
 # === ROOT TEST ===
 @app.get("/")
@@ -57,39 +59,36 @@ async def verify_webhook(request: Request):
         return PlainTextResponse(content=challenge, status_code=200, media_type="text/plain")
     return PlainTextResponse(content="Verification failed", status_code=403, media_type="text/plain")
 
-# === CHATGPT FUNCTION ===
+# === GPT RESPONSE ===
 def ask_chatgpt(question):
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
-
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Ты помощник по автозапчастям. Отвечай коротко и по делу."},
+                {"role": "system", "content": "Ты помощник по автозапчастям. Отвечай кратко и по делу."},
                 {"role": "user", "content": question}
             ]
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print("❌ Ошибка при обращении к ChatGPT:", e)
-        traceback.print_exc()
+        print("❌ Ошибка GPT:", e)
         return "Произошла ошибка при обращении к ChatGPT."
 
-# === TRANSLATION FUNCTION ===
-import re
-
+# === DETECT LANGUAGE ===
 def detect_language(text):
     if re.search(r'[үңөӱһҥҗө]', text.lower()):
         return "kyrgyz"
     elif re.search(r'[а-яА-ЯёЁ]', text):
         return "russian"
     else:
-        return "russian"  # по умолчанию
+        return "russian"
 
+# === TRANSLATE ===
 def translate(text, source_lang, target_lang):
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
-        prompt = f"Translate this text from {source_lang} to {target_lang}:\n\n{text}"
+        prompt = f"Translate this from {source_lang} to {target_lang}:\n\n{text}"
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}]
@@ -97,9 +96,9 @@ def translate(text, source_lang, target_lang):
         return response.choices[0].message.content.strip()
     except Exception as e:
         print("❌ Ошибка перевода:", e)
-        traceback.print_exc()
         return "[Translation Error]"
-# === WHATSAPP SEND ===
+
+# === SEND WHATSAPP ===
 def send_whatsapp_reply(recipient_number: str, message: str):
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
     headers = {
@@ -116,7 +115,7 @@ def send_whatsapp_reply(recipient_number: str, message: str):
     print("📤 Ответ отправлен:", response.status_code, response.text)
     return response.status_code
 
-# === WEBHOOK POST ===
+# === WEBHOOK MAIN ===
 @app.post("/webhook")
 async def receive_webhook(request: Request):
     data = await request.json()
@@ -127,29 +126,26 @@ async def receive_webhook(request: Request):
         change = entry["changes"][0]["value"]
         messages = change.get("messages")
 
-                if messages:
+        if messages:
             msg = messages[0]
             from_number = msg["from"]
             text = msg["text"]["body"]
-
             print("📨 Получено сообщение:", text)
 
-            # 1. Определяем язык клиента
+            # Определяем язык клиента
             client_lang = detect_language(text)
 
-            # 2. Переводим для сотрудника
-            translated = translate(text, client_lang, "english")
-            send_whatsapp_reply("971501109728", translated)
+            # Переводим на английский для сотрудника
+            to_employee = translate(text, client_lang, "english")
+            send_whatsapp_reply(EMPLOYEE_NUMBER, to_employee)
 
-            # 3. Получаем ответ от ChatGPT от имени сотрудника
-            employee_response = ask_chatgpt(translated)
+            # Получаем ответ от ChatGPT как сотрудник
+            response_en = ask_chatgpt(to_employee)
 
-            # 4. Переводим ответ обратно на язык клиента
-            translated_back = translate(employee_response, "english", client_lang)
-
-            # 5. Отправляем клиенту
-            send_whatsapp_reply(from_number, translated_back)
+            # Переводим обратно клиенту
+            reply_to_client = translate(response_en, "english", client_lang)
+            send_whatsapp_reply(from_number, reply_to_client)
 
     except Exception as e:
-        print("❌ Ошибка обработки запроса:", e)
+        print("❌ Ошибка обработки:", e)
         traceback.print_exc()
