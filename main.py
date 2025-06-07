@@ -84,13 +84,19 @@ def detect_language(text):
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "Определи язык: русский или кыргызский."},
+                {"role": "system", "content": "Определи язык этого текста: только 'кыргызский' или 'русский'."},
                 {"role": "user", "content": text}
             ]
         )
-        return response.choices[0].message.content.strip().lower()
+        lang = response.choices[0].message.content.strip().lower()
+        if "кыргыз" in lang:
+            return "кыргызский"
+        elif "рус" in lang:
+            return "русский"
+        else:
+            return "кыргызский"  # по умолчанию
     except:
-        return "русский"
+        return "кыргызский"
 
 # === TRANSLATION FUNCTION ===
 def translate_to_english(text):
