@@ -6,6 +6,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import os
 from openai import OpenAI
+import tempfile
 
 app = FastAPI()
 
@@ -77,7 +78,7 @@ def ask_chatgpt(question):
         traceback.print_exc()
         return "Произошла ошибка при обращении к ChatGPT."
 
-# === DETECT LANGUAGE FUNCTION ===
+# === LANGUAGE DETECTION ===
 def detect_language(text):
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
@@ -94,11 +95,11 @@ def detect_language(text):
         elif "рус" in lang:
             return "русский"
         else:
-            return "кыргызский"  # по умолчанию
+            return "кыргызский"
     except:
         return "кыргызский"
 
-# === TRANSLATION FUNCTION ===
+# === TRANSLATION ===
 def translate_to_english(text):
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
@@ -132,7 +133,35 @@ def translate_back(text, lang):
     except:
         return text
 
-# === WHATSAPP SEND ===
+# === WHATSAPP MEDIA ===
+def download_whatsapp_media(media_id):
+    url = f"https://graph.facebook.com/v18.0/{media_id}"
+    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
+    media_url = requests.get(url, headers=headers).json().get("url")
+    if not media_url:
+        return None
+    return requests.get(media_url, headers=headers).content
+
+# === WHISPER AUDIO ===
+def transcribe_audio_opus(audio_data):
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as f:
+            f.write(audio_data)
+            temp_path = f.name
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        with open(temp_path, "rb") as audio_file:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                response_format="text",
+                language="ru"
+            )
+        return transcript
+    except Exception as e:
+        print("❌ Ошибка при распознавании аудио:", e)
+        return None
+
+# === SEND WHATSAPP ===
 def send_whatsapp_reply(recipient_number: str, message: str):
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
     headers = {
@@ -149,11 +178,10 @@ def send_whatsapp_reply(recipient_number: str, message: str):
     print("📤 Ответ отправлен:", response.status_code, response.text)
     return response.status_code
 
-# === WEBHOOK POST ===
+# === WEBHOOK ===
 @app.post("/webhook")
 async def receive_webhook(request: Request):
     global last_debug_info
-
     data = await request.json()
     print("📩 Webhook получен:", data)
 
@@ -165,21 +193,28 @@ async def receive_webhook(request: Request):
         if messages:
             msg = messages[0]
             from_number = msg["from"]
-            text = msg["text"]["body"]
-            print("📨 Получено сообщение:", text)
+            text = None
 
+            if msg["type"] == "text":
+                text = msg["text"]["body"]
+            elif msg["type"] == "audio" and msg["audio"].get("voice"):
+                media_id = msg["audio"]["id"]
+                audio_data = download_whatsapp_media(media_id)
+                text = transcribe_audio_opus(audio_data) if audio_data else None
+
+            if not text:
+                send_whatsapp_reply(from_number, "Пожалуйста, напишите сообщение текстом.")
+                return JSONResponse(content={"message": "no text"}, status_code=200)
+
+            print("📨 Получено сообщение:", text)
             client_lang = detect_language(text)
             to_employee = translate_to_english(text)
             response_en = ask_chatgpt(to_employee)
             reply_to_client = translate_back(response_en, client_lang)
 
-            # Ответ клиенту
             send_whatsapp_reply(from_number, reply_to_client)
-
-            # Отправка перевода сотруднику
             send_whatsapp_reply("971501109728", to_employee)
 
-            # Сохраняем для /debug
             last_debug_info = {
                 "from": from_number,
                 "original_message": text,
@@ -193,7 +228,7 @@ async def receive_webhook(request: Request):
         print("❌ Ошибка обработки запроса:", e)
         traceback.print_exc()
 
-# === DEBUG VIEW ===
+# === DEBUG INFO ===
 @app.get("/debug")
 def get_debug_info():
     if not last_debug_info:
