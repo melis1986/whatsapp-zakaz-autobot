@@ -60,7 +60,7 @@ async def verify_webhook(request: Request):
 # === CHATGPT FUNCTION ===
 def ask_chatgpt(question):
     try:
-        client = OpenAI(api_key=OPENAI_API_KEY)  # ✅ Новый синтаксис
+        client = OpenAI(api_key=OPENAI_API_KEY)
 
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -74,6 +74,23 @@ def ask_chatgpt(question):
         print("❌ Ошибка при обращении к ChatGPT:", e)
         traceback.print_exc()
         return "Произошла ошибка при обращении к ChatGPT."
+
+# === TRANSLATION FUNCTION ===
+def translate_to_english(text):
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a translator. Translate the following Russian or Kyrgyz message into simple English."},
+                {"role": "user", "content": text}
+            ]
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print("❌ Ошибка перевода:", e)
+        traceback.print_exc()
+        return "[Translation Error]"
 
 # === WHATSAPP SEND ===
 def send_whatsapp_reply(recipient_number: str, message: str):
@@ -110,8 +127,13 @@ async def receive_webhook(request: Request):
 
             print("📨 Получено сообщение:", text)
 
+            # 1. Ответ клиенту
             reply = ask_chatgpt(text)
             send_whatsapp_reply(from_number, reply)
+
+            # 2. Перевод для сотрудника и отправка ему
+            translated = translate_to_english(text)
+            send_whatsapp_reply("971501109728", translated)
 
     except Exception as e:
         print("❌ Ошибка обработки запроса:", e)
