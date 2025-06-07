@@ -5,7 +5,6 @@ import requests
 import os
 import gspread
 import tempfile
-import base64
 from openai import OpenAI
 from google.oauth2.service_account import Credentials
 
@@ -18,10 +17,26 @@ SPREADSHEET_KEY = "1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE"
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 PHONE_NUMBER_ID = "647813198421368"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# === HELPERS ===
+# === ROOT TEST ===
+@app.get("/")
+def root():
+    return {"message": "WhatsApp CRM Bot is working ✅"}
+
+# === VERIFY WEBHOOK ===
+@app.get("/webhook")
+async def verify_webhook(request: Request):
+    params = dict(request.query_params)
+    mode = params.get("hub.mode")
+    token = params.get("hub.verify_token")
+    challenge = params.get("hub.challenge")
+
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        return PlainTextResponse(content=challenge, status_code=200)
+    return PlainTextResponse(content="Verification failed", status_code=403)
+
+# === SEND MESSAGE ===
 def send_whatsapp_reply(recipient_number: str, message: str):
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
     headers = {
@@ -37,7 +52,7 @@ def send_whatsapp_reply(recipient_number: str, message: str):
     response = requests.post(url, json=payload, headers=headers)
     print("📤 Ответ отправлен:", response.status_code, response.text)
 
-
+# === TRANSCRIBE AUDIO ===
 def transcribe_audio(file_url: str) -> str:
     audio = requests.get(file_url, headers={"Authorization": f"Bearer {WHATSAPP_TOKEN}"}).content
     with tempfile.NamedTemporaryFile(delete=False, suffix=".ogg") as tmp:
@@ -52,10 +67,10 @@ def transcribe_audio(file_url: str) -> str:
         )
     return transcript
 
-
+# === TRANSLATE ===
 def translate_text(text: str, source_lang: str, target_lang: str) -> str:
     messages = [
-        {"role": "system", "content": f"Переведи с {source_lang} на {target_lang}. Только перевод, без лишнего текста."},
+        {"role": "system", "content": f"Переведи с {source_lang} на {target_lang}. Только перевод."},
         {"role": "user", "content": text}
     ]
     result = client.chat.completions.create(
@@ -64,7 +79,7 @@ def translate_text(text: str, source_lang: str, target_lang: str) -> str:
     )
     return result.choices[0].message.content.strip()
 
-
+# === GOOGLE SHEETS LOG ===
 def log_to_sheet(number, original, translated):
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=scopes)
@@ -72,12 +87,7 @@ def log_to_sheet(number, original, translated):
     sheet = gc.open_by_key(SPREADSHEET_KEY).sheet1
     sheet.append_row([number, original, translated])
 
-# === ROOT CHECK ===
-@app.get("/")
-def root():
-    return {"message": "WhatsApp CRM Bot is working ✅"}
-
-# === WEBHOOK ===
+# === WEBHOOK HANDLER ===
 @app.post("/webhook")
 async def receive_webhook(request: Request):
     data = await request.json()
@@ -100,21 +110,24 @@ async def receive_webhook(request: Request):
             media_url = media_url_req.json()["url"]
             transcript = transcribe_audio(media_url)
 
-            urdu = translate_text(transcript, "русского", "урду")
-            reply = translate_text("Понял, сейчас уточним деталь у поставщика.", "русского", "урду")
-            ru_back = translate_text(reply, "урду", "русский")
+            # Ответ клиенту, чтобы он всегда писал текст
+            send_whatsapp_reply(from_number, "🎙️ Вы отправили голосовое сообщение. Пожалуйста, напишите, чтобы мы точно поняли вашу заявку.")
 
-            send_whatsapp_reply(from_number, ru_back)
+            urdu = translate_text(transcript, "русского", "урду")
+            reply_urdu = translate_text("Понял, сейчас уточним деталь у поставщика.", "русского", "урду")
+            reply_ru = translate_text(reply_urdu, "урду", "русский")
+
+            send_whatsapp_reply(from_number, reply_ru)
             log_to_sheet(from_number, transcript, urdu)
             return {"status": "audio_processed"}
 
         elif msg_type == "text":
             text = msg["text"]["body"]
             urdu = translate_text(text, "русского", "урду")
-            reply = translate_text("Понял, сейчас уточним деталь у поставщика.", "русского", "урду")
-            ru_back = translate_text(reply, "урду", "русский")
+            reply_urdu = translate_text("Понял, сейчас уточним деталь у поставщика.", "русского", "урду")
+            reply_ru = translate_text(reply_urdu, "урду", "русский")
 
-            send_whatsapp_reply(from_number, ru_back)
+            send_whatsapp_reply(from_number, reply_ru)
             log_to_sheet(from_number, text, urdu)
             return {"status": "text_processed"}
 
@@ -126,37 +139,3 @@ async def receive_webhook(request: Request):
         print("❌ Ошибка:", e)
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
-
-# === OPENAI TEST ===
-@app.get("/test-openai")
-def test_openai_key():
-    try:
-        if not OPENAI_API_KEY:
-            return {"status": "error", "message": "❌ OPENAI_API_KEY не установлен в окружении"}
-
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": "Проверка ключа OpenAI. Ты меня слышишь?"}]
-        )
-        return {"status": "success", "reply": response.choices[0].message.content.strip()}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-@app.get("/test-openai")
-def test_openai():
-    try:
-        test_prompt = "Привет! Ты меня слышишь?"
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": test_prompt}]
-        )
-        return {
-            "status": "success",
-            "reply": response.choices[0].message.content.strip()
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": str(e)
-        }
