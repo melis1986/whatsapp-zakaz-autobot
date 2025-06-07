@@ -1,127 +1,118 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-import openai
+from fastapi.responses import JSONResponse, PlainTextResponse
+import traceback
 import requests
-import json
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import datetime
 import os
+from openai import OpenAI  # ✅ новый способ импорта
 
 app = FastAPI()
 
-VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN")
-WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+# === CONFIG ===
+VERIFY_TOKEN = "autoland777"
+SERVICE_ACCOUNT_FILE = "/etc/secrets/service_account.json"
+SPREADSHEET_KEY = "1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE"
 
-openai.api_key = OPENAI_API_KEY
+WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+PHONE_NUMBER_ID = "647813198421368"
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
-client = gspread.authorize(creds)
-sheet = client.open_by_key("1YHAhKeKzT5in87uf1d5vCt0AnXllhXl4PemviXbPxNE").sheet1
-
+# === ROOT TEST ===
 @app.get("/")
-def root():
-    return {"message": "WhatsApp CRM Bot is working ✅"}
+def read_root():
+    try:
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=scopes)
+        gc = gspread.authorize(creds)
+        sheet = gc.open_by_key(SPREADSHEET_KEY).sheet1
+        first_row = sheet.row_values(1)
 
+        return JSONResponse(content={
+            "message": "Бот успешно подключён к Google Sheets ✅",
+            "headers": first_row
+        })
+    except Exception as e:
+        return JSONResponse(
+            content={
+                "error": "Ошибка подключения",
+                "details": str(e),
+                "trace": traceback.format_exc()
+            },
+            status_code=500
+        )
+
+# === WEBHOOK VERIFY ===
 @app.get("/webhook")
-def verify_token(request: Request):
-    params = request.query_params
-    if params.get("hub.verify_token") == VERIFY_TOKEN:
-        return int(params.get("hub.challenge"))
-    return "Invalid verification token"
+async def verify_webhook(request: Request):
+    params = dict(request.query_params)
+    mode = params.get("hub.mode")
+    token = params.get("hub.verify_token")
+    challenge = params.get("hub.challenge")
 
-@app.post("/webhook")
-async def webhook(request: Request):
-    data = await request.json()
-    print("📩 Webhook получен:", data)
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        return PlainTextResponse(content=challenge, status_code=200, media_type="text/plain")
+    return PlainTextResponse(content="Verification failed", status_code=403, media_type="text/plain")
 
-    if data.get("object") == "whatsapp_business_account":
-        for entry in data.get("entry", []):
-            for change in entry.get("changes", []):
-                value = change.get("value")
-                messages = value.get("messages")
-                if messages:
-                    for message in messages:
-                        wa_id = message["from"]
-                        msg_type = message["type"]
-                        user_name = value.get("contacts")[0].get("profile").get("name")
-                        timestamp = message.get("timestamp")
+# === CHATGPT FUNCTION ===
+def ask_chatgpt(question):
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)  # ✅ Новый синтаксис
 
-                        if msg_type == "text":
-                            text = message["text"]["body"]
-                            await process_message(wa_id, user_name, text, timestamp)
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Ты помощник по автозапчастям. Отвечай коротко и по делу."},
+                {"role": "user", "content": question}
+            ]
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print("❌ Ошибка при обращении к ChatGPT:", e)
+        traceback.print_exc()
+        return "Произошла ошибка при обращении к ChatGPT."
 
-                        elif msg_type == "audio":
-                            media_id = message["audio"]["id"]
-                            audio_url = get_audio_url(media_id)
-                            audio_text = transcribe_audio(audio_url)
-                            if audio_text:
-                                await process_message(wa_id, user_name, audio_text, timestamp)
-                            else:
-                                send_message(wa_id, "Пожалуйста, напишите текстом, чтобы мы точно поняли ваш запрос.")
-
-    return JSONResponse(status_code=200, content={"message": "EVENT_RECEIVED"})
-
-def get_audio_url(media_id):
-    url = f"https://graph.facebook.com/v19.0/{media_id}"
-    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
-    response = requests.get(url, headers=headers)
-    return response.json().get("url")
-
-def transcribe_audio(audio_url):
-    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
-    audio_data = requests.get(audio_url, headers=headers).content
-    response = openai.audio.transcriptions.create(model="whisper-1", file=audio_data, response_format="text", language="ru")
-    return response
-
-async def process_message(wa_id, user_name, message, timestamp):
-    translated = translate_text(message, target_lang="ur")
-
-    sheet.append_row([str(datetime.now()), user_name, wa_id, message, translated])
-
-    # Ответ клиенту от ChatGPT
-    reply = get_chatgpt_reply(message)
-    send_message(wa_id, reply)
-
-    # Переводим ответ и отправляем сотруднику
-    reply_ur = translate_text(reply, target_lang="ur")
-    forward_to_staff(reply_ur)
-
-def send_message(phone_number, message):
-    url = f"https://graph.facebook.com/v19.0/647813198421368/messages"
+# === WHATSAPP SEND ===
+def send_whatsapp_reply(recipient_number: str, message: str):
+    url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
     }
     payload = {
         "messaging_product": "whatsapp",
-        "to": phone_number,
+        "to": recipient_number,
         "type": "text",
         "text": {"body": message}
     }
-    response = requests.post(url, headers=headers, json=payload)
+    response = requests.post(url, json=payload, headers=headers)
     print("📤 Ответ отправлен:", response.status_code, response.text)
+    return response.status_code
 
-def get_chatgpt_reply(prompt):
-    completion = openai.chat.completions.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return completion.choices[0].message.content.strip()
+# === WEBHOOK POST ===
+@app.post("/webhook")
+async def receive_webhook(request: Request):
+    data = await request.json()
+    print("📩 Webhook получен:", data)
 
-def translate_text(text, target_lang="ur"):
-    completion = openai.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": f"Переведи на {target_lang}. Только перевод."},
-            {"role": "user", "content": text}
-        ]
-    )
-    return completion.choices[0].message.content.strip()
+    try:
+        entry = data["entry"][0]
+        change = entry["changes"][0]["value"]
+        messages = change.get("messages")
 
-def forward_to_staff(message):
-    # Здесь можно заменить на номер сотрудника и повторно вызвать send_message
-    staff_number = "971501234567"  # пример
-    send_message(staff_number, message)
+        if messages:
+            msg = messages[0]
+            from_number = msg["from"]
+            text = msg["text"]["body"]
+
+            print("📨 Получено сообщение:", text)
+
+            reply = ask_chatgpt(text)
+            send_whatsapp_reply(from_number, reply)
+
+    except Exception as e:
+        print("❌ Ошибка обработки запроса:", e)
+        traceback.print_exc()
