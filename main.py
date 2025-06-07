@@ -6,7 +6,6 @@ import gspread
 from google.oauth2.service_account import Credentials
 import os
 from openai import OpenAI
-import tempfile
 
 app = FastAPI()
 
@@ -78,7 +77,7 @@ def ask_chatgpt(question):
         traceback.print_exc()
         return "Произошла ошибка при обращении к ChatGPT."
 
-# === LANGUAGE DETECTION ===
+# === DETECT LANGUAGE FUNCTION ===
 def detect_language(text):
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
@@ -95,11 +94,11 @@ def detect_language(text):
         elif "рус" in lang:
             return "русский"
         else:
-            return "кыргызский"
+            return "кыргызский"  # по умолчанию
     except:
         return "кыргызский"
 
-# === TRANSLATION ===
+# === TRANSLATION FUNCTION ===
 def translate_to_english(text):
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
@@ -133,35 +132,7 @@ def translate_back(text, lang):
     except:
         return text
 
-# === WHATSAPP MEDIA ===
-def download_whatsapp_media(media_id):
-    url = f"https://graph.facebook.com/v18.0/{media_id}"
-    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
-    media_url = requests.get(url, headers=headers).json().get("url")
-    if not media_url:
-        return None
-    return requests.get(media_url, headers=headers).content
-
-# === WHISPER AUDIO ===
-def transcribe_audio_opus(audio_data):
-    try:
-        with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as f:
-            f.write(audio_data)
-            temp_path = f.name
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        with open(temp_path, "rb") as audio_file:
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file,
-                response_format="text",
-                language="ru"
-            )
-        return transcript
-    except Exception as e:
-        print("❌ Ошибка при распознавании аудио:", e)
-        return None
-
-# === SEND WHATSAPP ===
+# === WHATSAPP SEND ===
 def send_whatsapp_reply(recipient_number: str, message: str):
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
     headers = {
@@ -178,10 +149,11 @@ def send_whatsapp_reply(recipient_number: str, message: str):
     print("📤 Ответ отправлен:", response.status_code, response.text)
     return response.status_code
 
-# === WEBHOOK ===
+# === WEBHOOK POST ===
 @app.post("/webhook")
 async def receive_webhook(request: Request):
     global last_debug_info
+
     data = await request.json()
     print("📩 Webhook получен:", data)
 
@@ -193,42 +165,74 @@ async def receive_webhook(request: Request):
         if messages:
             msg = messages[0]
             from_number = msg["from"]
-            text = None
+            msg_type = msg["type"]
 
-            if msg["type"] == "text":
+            if msg_type == "text":
                 text = msg["text"]["body"]
-            elif msg["type"] == "audio" and msg["audio"].get("voice"):
-                media_id = msg["audio"]["id"]
-                audio_data = download_whatsapp_media(media_id)
-                text = transcribe_audio_opus(audio_data) if audio_data else None
+                print("📨 Получено сообщение:", text)
 
-            if not text:
-                send_whatsapp_reply(from_number, "Пожалуйста, напишите сообщение текстом.")
-                return JSONResponse(content={"message": "no text"}, status_code=200)
+                client_lang = detect_language(text)
+                to_employee = translate_to_english(text)
+                response_en = ask_chatgpt(to_employee)
+                reply_to_client = translate_back(response_en, client_lang)
 
-            print("📨 Получено сообщение:", text)
-            client_lang = detect_language(text)
-            to_employee = translate_to_english(text)
-            response_en = ask_chatgpt(to_employee)
-            reply_to_client = translate_back(response_en, client_lang)
+                send_whatsapp_reply(from_number, reply_to_client)
+                send_whatsapp_reply("971501109728", to_employee)
 
-            send_whatsapp_reply(from_number, reply_to_client)
-            send_whatsapp_reply("971501109728", to_employee)
+                last_debug_info = {
+                    "from": from_number,
+                    "original_message": text,
+                    "client_language": client_lang,
+                    "translated_to_english": to_employee,
+                    "chatgpt_reply_en": response_en,
+                    "translated_back": reply_to_client
+                }
 
-            last_debug_info = {
-                "from": from_number,
-                "original_message": text,
-                "client_language": client_lang,
-                "translated_to_english": to_employee,
-                "chatgpt_reply_en": response_en,
-                "translated_back": reply_to_client
-            }
+            elif msg_type == "audio":
+                voice_id = msg["audio"]["id"]
+                media_url = f"https://graph.facebook.com/v18.0/{voice_id}"
+                headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
+                media_info = requests.get(media_url, headers=headers).json()
+                file_url = media_info.get("url")
+
+                audio_response = requests.get(file_url, headers=headers)
+                audio_path = "/tmp/audio.ogg"
+                with open(audio_path, "wb") as f:
+                    f.write(audio_response.content)
+
+                import subprocess
+                wav_path = "/tmp/audio.wav"
+                subprocess.run(["ffmpeg", "-i", audio_path, wav_path])
+
+                import openai
+                openai.api_key = OPENAI_API_KEY
+                with open(wav_path, "rb") as f:
+                    transcript = openai.Audio.transcribe("whisper-1", f)["text"]
+
+                print("🔊 Распознанный текст:", transcript)
+
+                client_lang = detect_language(transcript)
+                to_employee = translate_to_english(transcript)
+                response_en = ask_chatgpt(to_employee)
+                reply_to_client = translate_back(response_en, client_lang)
+
+                send_whatsapp_reply(from_number, reply_to_client)
+                send_whatsapp_reply("971501109728", to_employee)
+
+                last_debug_info = {
+                    "from": from_number,
+                    "original_audio_text": transcript,
+                    "client_language": client_lang,
+                    "translated_to_english": to_employee,
+                    "chatgpt_reply_en": response_en,
+                    "translated_back": reply_to_client
+                }
 
     except Exception as e:
         print("❌ Ошибка обработки запроса:", e)
         traceback.print_exc()
 
-# === DEBUG INFO ===
+# === DEBUG VIEW ===
 @app.get("/debug")
 def get_debug_info():
     if not last_debug_info:
