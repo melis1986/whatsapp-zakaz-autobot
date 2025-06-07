@@ -76,22 +76,29 @@ def ask_chatgpt(question):
         return "Произошла ошибка при обращении к ChatGPT."
 
 # === TRANSLATION FUNCTION ===
-def translate_to_english(text):
+import re
+
+def detect_language(text):
+    if re.search(r'[үңөӱһҥҗө]', text.lower()):
+        return "kyrgyz"
+    elif re.search(r'[а-яА-ЯёЁ]', text):
+        return "russian"
+    else:
+        return "russian"  # по умолчанию
+
+def translate(text, source_lang, target_lang):
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
+        prompt = f"Translate this text from {source_lang} to {target_lang}:\n\n{text}"
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a translator. Translate the following Russian or Kyrgyz message into simple English."},
-                {"role": "user", "content": text}
-            ]
+            messages=[{"role": "user", "content": prompt}]
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
         print("❌ Ошибка перевода:", e)
         traceback.print_exc()
         return "[Translation Error]"
-
 # === WHATSAPP SEND ===
 def send_whatsapp_reply(recipient_number: str, message: str):
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
