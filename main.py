@@ -148,10 +148,6 @@ def transcribe_audio(file_path):
         traceback.print_exc()
         return "[Ошибка расшифровки аудио]"
 
-# Этот блок нужно вставить после:
-# === TRANSLATE BACK ===
-# def translate_back(text, lang): ...
-
 # === WHATSAPP SEND ===
 def send_whatsapp_reply(recipient_number: str, message: str):
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
@@ -166,7 +162,7 @@ def send_whatsapp_reply(recipient_number: str, message: str):
         "text": {"body": message}
     }
     response = requests.post(url, json=payload, headers=headers)
-    print("📤 Ответ отправлен:", response.status_code, response.text)
+    print("\U0001f4e4 Ответ отправлен:", response.status_code, response.text)
     return response.status_code
 
 # === WEBHOOK POST ===
@@ -175,7 +171,7 @@ async def receive_webhook(request: Request):
     global last_debug_info
 
     data = await request.json()
-    print("📩 Webhook получен:", data)
+    print("\U0001f4e9 Webhook получен:", data)
 
     try:
         entry = data["entry"][0]
@@ -189,7 +185,7 @@ async def receive_webhook(request: Request):
 
             if msg_type == "text":
                 text = msg["text"]["body"]
-                print("📨 Получено сообщение:", text)
+                print("\U0001f4e8 Получено сообщение:", text)
 
                 client_lang = detect_language(text)
                 to_employee = translate_to_english(text)
@@ -222,14 +218,10 @@ async def receive_webhook(request: Request):
 
                 import subprocess
                 wav_path = "/tmp/audio.wav"
-                subprocess.run(["ffmpeg", "-i", audio_path, wav_path])
+                subprocess.run(["ffmpeg", "-y", "-i", audio_path, wav_path])
 
-                import openai
-                openai.api_key = OPENAI_API_KEY
-                with open(wav_path, "rb") as f:
-                    transcript = openai.Audio.transcribe("whisper-1", f)["text"]
-
-                print("🔊 Распознанный текст:", transcript)
+                transcript = transcribe_audio(wav_path)
+                print("\U0001f50a Распознанный текст:", transcript)
 
                 client_lang = detect_language(transcript)
                 to_employee = translate_to_english(transcript)
