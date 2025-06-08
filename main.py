@@ -32,12 +32,34 @@ def read_root():
         creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=scopes)
         gc = gspread.authorize(creds)
         sheet = gc.open_by_key(SPREADSHEET_KEY).sheet1
-        first_row = sheet.row_values(1)
+        headers = sheet.row_values(1)
 
-        return JSONResponse(content={
-            "message": "Бот успешно подключён к Google Sheets ✅",
-            "headers": first_row
-        })
+        return HTMLResponse(content=f"""
+        <html>
+        <head>
+            <title>CRM Бот Автозапчасти</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }}
+                h1 {{ color: #2c3e50; }}
+                ul {{ list-style-type: none; padding: 0; }}
+                li {{
+                    background: #ecf0f1;
+                    margin: 5px 0;
+                    padding: 10px;
+                    border-left: 6px solid #27ae60;
+                    font-size: 16px;
+                }}
+            </style>
+        </head>
+        <body>
+            <h1>✅ Бот подключён к Google Sheets</h1>
+            <h2>Заголовки таблицы работают:</h2>
+            <ul>
+                {''.join([f'<li>✔️ {header}</li>' for header in headers])}
+            </ul>
+        </body>
+        </html>
+        """, status_code=200)
     except Exception as e:
         return JSONResponse(
             content={
