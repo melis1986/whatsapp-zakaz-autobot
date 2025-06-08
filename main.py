@@ -132,6 +132,26 @@ def translate_back(text, lang):
     except:
         return text
 
+# === AUDIO TRANSCRIPTION FUNCTION ===
+def transcribe_audio(file_path):
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        with open(file_path, "rb") as f:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f,
+                response_format="text"
+            )
+        return transcript
+    except Exception as e:
+        print("❌ Ошибка при транскрипции:", e)
+        traceback.print_exc()
+        return "[Ошибка расшифровки аудио]"
+
+# Этот блок нужно вставить после:
+# === TRANSLATE BACK ===
+# def translate_back(text, lang): ...
+
 # === WHATSAPP SEND ===
 def send_whatsapp_reply(recipient_number: str, message: str):
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
