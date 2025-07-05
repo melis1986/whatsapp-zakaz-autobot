@@ -1,11 +1,13 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, PlainTextResponse, HTMLResponse  # ← вот сюда добавь
+from fastapi.responses import JSONResponse, PlainTextResponse, HTMLResponse
 import traceback
 import requests
 import gspread
 from google.oauth2.service_account import Credentials
 import os
 from openai import OpenAI
+from datetime import datetime
+import subprocess
 
 app = FastAPI()
 
@@ -99,7 +101,7 @@ def ask_chatgpt(question):
         traceback.print_exc()
         return "Произошла ошибка при обращении к ChatGPT."
 
-# === DETECT LANGUAGE FUNCTION ===
+# === LANGUAGE DETECTION ===
 def detect_language(text):
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
@@ -111,16 +113,11 @@ def detect_language(text):
             ]
         )
         lang = response.choices[0].message.content.strip().lower()
-        if "кыргыз" in lang:
-            return "кыргызский"
-        elif "рус" in lang:
-            return "русский"
-        else:
-            return "кыргызский"  # по умолчанию
+        return "кыргызский" if "кыргыз" in lang else "русский"
     except:
         return "кыргызский"
 
-# === TRANSLATION FUNCTION ===
+# === TRANSLATION ===
 def translate_to_english(text):
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
@@ -132,9 +129,7 @@ def translate_to_english(text):
             ]
         )
         return response.choices[0].message.content.strip()
-    except Exception as e:
-        print("❌ Ошибка перевода:", e)
-        traceback.print_exc()
+    except:
         return "[Translation Error]"
 
 # === TRANSLATE BACK ===
@@ -154,7 +149,7 @@ def translate_back(text, lang):
     except:
         return text
 
-# === AUDIO TRANSCRIPTION FUNCTION ===
+# === TRANSCRIBE AUDIO ===
 def transcribe_audio(file_path):
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
@@ -165,12 +160,28 @@ def transcribe_audio(file_path):
                 response_format="text"
             )
         return transcript
-    except Exception as e:
-        print("❌ Ошибка при транскрипции:", e)
-        traceback.print_exc()
+    except:
         return "[Ошибка расшифровки аудио]"
 
-# === WHATSAPP SEND ===
+# === SAVE TO SHEET ===
+def save_to_sheet(from_number, client_lang, original_message, translated_to_english, gpt_reply, translated_back):
+    try:
+        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=scopes)
+        gc = gspread.authorize(creds)
+        sheet = gc.open_by_key(SPREADSHEET_KEY).sheet1
+
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        new_row = [
+            now, "", from_number, client_lang, original_message,
+            translated_to_english, gpt_reply, translated_back, "Новый"
+        ]
+        sheet.append_row(new_row, value_input_option="USER_ENTERED")
+    except Exception as e:
+        print("❌ Ошибка сохранения в таблицу:", e)
+        traceback.print_exc()
+
+# === SEND WHATSAPP ===
 def send_whatsapp_reply(recipient_number: str, message: str):
     url = f"https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages"
     headers = {
@@ -184,16 +195,14 @@ def send_whatsapp_reply(recipient_number: str, message: str):
         "text": {"body": message}
     }
     response = requests.post(url, json=payload, headers=headers)
-    print("\U0001f4e4 Ответ отправлен:", response.status_code, response.text)
+    print("📤 Ответ отправлен:", response.status_code, response.text)
     return response.status_code
 
-# === WEBHOOK POST ===
+# === WEBHOOK ===
 @app.post("/webhook")
 async def receive_webhook(request: Request):
     global last_debug_info
-
     data = await request.json()
-    print("\U0001f4e9 Webhook получен:", data)
 
     try:
         entry = data["entry"][0]
@@ -207,8 +216,6 @@ async def receive_webhook(request: Request):
 
             if msg_type == "text":
                 text = msg["text"]["body"]
-                print("\U0001f4e8 Получено сообщение:", text)
-
                 client_lang = detect_language(text)
                 to_employee = translate_to_english(text)
                 response_en = ask_chatgpt(to_employee)
@@ -225,6 +232,7 @@ async def receive_webhook(request: Request):
                     "chatgpt_reply_en": response_en,
                     "translated_back": reply_to_client
                 }
+                save_to_sheet(from_number, client_lang, text, to_employee, response_en, reply_to_client)
 
             elif msg_type == "audio":
                 voice_id = msg["audio"]["id"]
@@ -238,13 +246,10 @@ async def receive_webhook(request: Request):
                 with open(audio_path, "wb") as f:
                     f.write(audio_response.content)
 
-                import subprocess
                 wav_path = "/tmp/audio.wav"
                 subprocess.run(["ffmpeg", "-y", "-i", audio_path, wav_path])
 
                 transcript = transcribe_audio(wav_path)
-                print("\U0001f50a Распознанный текст:", transcript)
-
                 client_lang = detect_language(transcript)
                 to_employee = translate_to_english(transcript)
                 response_en = ask_chatgpt(to_employee)
@@ -261,12 +266,13 @@ async def receive_webhook(request: Request):
                     "chatgpt_reply_en": response_en,
                     "translated_back": reply_to_client
                 }
+                save_to_sheet(from_number, client_lang, transcript, to_employee, response_en, reply_to_client)
 
     except Exception as e:
         print("❌ Ошибка обработки запроса:", e)
         traceback.print_exc()
 
-# === DEBUG VIEW ===
+# === DEBUG INFO ===
 @app.get("/debug")
 def get_debug_info():
     if not last_debug_info:
