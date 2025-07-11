@@ -156,11 +156,15 @@ def send_whatsapp_reply(number, msg):
     return requests.post(url, json=data, headers=headers).status_code
 
 @app.post("/webhook")
+@app.post("/webhook")
 async def receive_webhook(request: Request):
     global last_debug_info
     data = await request.json()
     try:
-        msg = data["entry"][0]["changes"][0]["value"].get("messages", [])[0]
+        messages = data["entry"][0]["changes"][0]["value"].get("messages", [])
+        if not messages:
+            return JSONResponse(content={"info": "No message to process"}, status_code=200)
+        msg = messages[0]
         from_number = msg["from"]
         msg_type = msg["type"]
 
@@ -197,7 +201,6 @@ async def receive_webhook(request: Request):
     except Exception as e:
         print("❌ Ошибка обработки запроса:", e)
         traceback.print_exc()
-
 @app.get("/debug")
 def get_debug_info():
     return JSONResponse(content=last_debug_info or {"message": "Нет данных"})
