@@ -1,5 +1,6 @@
-fastapi
-uvicorn
-gspread
-google-auth
-openai
+fastapi==0.110.0
+uvicorn==0.29.0
+gspread==6.2.1
+google-auth==2.40.0
+openai==1.25.1
+requests==2.31.0
