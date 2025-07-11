@@ -204,6 +204,9 @@ async def receive_webhook(request: Request):
     global last_debug_info
     data = await request.json()
 
+    CLIENT_NUMBER = "971501109728"
+    EMPLOYEE_NUMBER = "996703731000"
+
     try:
         entry = data["entry"][0]
         change = entry["changes"][0]["value"]
@@ -214,59 +217,64 @@ async def receive_webhook(request: Request):
             from_number = msg["from"]
             msg_type = msg["type"]
 
-            if msg_type == "text":
+            if from_number == CLIENT_NUMBER:
+                if msg_type == "text":
+                    text = msg["text"]["body"]
+                    client_lang = detect_language(text)
+                    to_employee = translate_to_english(text)
+                    response_en = ask_chatgpt(to_employee)
+                    reply_to_client = translate_back(response_en, client_lang)
+
+                    send_whatsapp_reply(CLIENT_NUMBER, reply_to_client)
+                    send_whatsapp_reply(EMPLOYEE_NUMBER, to_employee)
+
+                    last_debug_info = {
+                        "from": from_number,
+                        "original_message": text,
+                        "client_language": client_lang,
+                        "translated_to_english": to_employee,
+                        "chatgpt_reply_en": response_en,
+                        "translated_back": reply_to_client
+                    }
+                    save_to_sheet(from_number, client_lang, text, to_employee, response_en, reply_to_client)
+
+                elif msg_type == "audio":
+                    voice_id = msg["audio"]["id"]
+                    media_url = f"https://graph.facebook.com/v18.0/{voice_id}"
+                    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
+                    media_info = requests.get(media_url, headers=headers).json()
+                    file_url = media_info.get("url")
+
+                    audio_response = requests.get(file_url, headers=headers)
+                    audio_path = "/tmp/audio.ogg"
+                    with open(audio_path, "wb") as f:
+                        f.write(audio_response.content)
+
+                    wav_path = "/tmp/audio.wav"
+                    subprocess.run(["ffmpeg", "-y", "-i", audio_path, wav_path])
+
+                    transcript = transcribe_audio(wav_path)
+                    client_lang = detect_language(transcript)
+                    to_employee = translate_to_english(transcript)
+                    response_en = ask_chatgpt(to_employee)
+                    reply_to_client = translate_back(response_en, client_lang)
+
+                    send_whatsapp_reply(CLIENT_NUMBER, reply_to_client)
+                    send_whatsapp_reply(EMPLOYEE_NUMBER, to_employee)
+
+                    last_debug_info = {
+                        "from": from_number,
+                        "original_audio_text": transcript,
+                        "client_language": client_lang,
+                        "translated_to_english": to_employee,
+                        "chatgpt_reply_en": response_en,
+                        "translated_back": reply_to_client
+                    }
+                    save_to_sheet(from_number, client_lang, transcript, to_employee, response_en, reply_to_client)
+
+            elif from_number == EMPLOYEE_NUMBER and msg_type == "text":
                 text = msg["text"]["body"]
-                client_lang = detect_language(text)
-                to_employee = translate_to_english(text)
-                response_en = ask_chatgpt(to_employee)
-                reply_to_client = translate_back(response_en, client_lang)
-
-                send_whatsapp_reply(from_number, reply_to_client)
-                send_whatsapp_reply("971501109728", to_employee)
-
-                last_debug_info = {
-                    "from": from_number,
-                    "original_message": text,
-                    "client_language": client_lang,
-                    "translated_to_english": to_employee,
-                    "chatgpt_reply_en": response_en,
-                    "translated_back": reply_to_client
-                }
-                save_to_sheet(from_number, client_lang, text, to_employee, response_en, reply_to_client)
-
-            elif msg_type == "audio":
-                voice_id = msg["audio"]["id"]
-                media_url = f"https://graph.facebook.com/v18.0/{voice_id}"
-                headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
-                media_info = requests.get(media_url, headers=headers).json()
-                file_url = media_info.get("url")
-
-                audio_response = requests.get(file_url, headers=headers)
-                audio_path = "/tmp/audio.ogg"
-                with open(audio_path, "wb") as f:
-                    f.write(audio_response.content)
-
-                wav_path = "/tmp/audio.wav"
-                subprocess.run(["ffmpeg", "-y", "-i", audio_path, wav_path])
-
-                transcript = transcribe_audio(wav_path)
-                client_lang = detect_language(transcript)
-                to_employee = translate_to_english(transcript)
-                response_en = ask_chatgpt(to_employee)
-                reply_to_client = translate_back(response_en, client_lang)
-
-                send_whatsapp_reply(from_number, reply_to_client)
-                send_whatsapp_reply("971501109728", to_employee)
-
-                last_debug_info = {
-                    "from": from_number,
-                    "original_audio_text": transcript,
-                    "client_language": client_lang,
-                    "translated_to_english": to_employee,
-                    "chatgpt_reply_en": response_en,
-                    "translated_back": reply_to_client
-                }
-                save_to_sheet(from_number, client_lang, transcript, to_employee, response_en, reply_to_client)
+                send_whatsapp_reply(CLIENT_NUMBER, text)
 
     except Exception as e:
         print("❌ Ошибка обработки запроса:", e)
